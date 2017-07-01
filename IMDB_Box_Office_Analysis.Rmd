@@ -1,0 +1,64 @@
+---
+title: "IMDB Box Office Analysis"
+author: "Anand Narasimhan"
+date: "7/1/2017"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+options(scipen=999)
+```
+
+## The data
+
+The source data for this was downloaded from Kaggle at <https://www.kaggle.com/deepmatrix/imdb-5000-movie-dataset/downloads/movie_metadata.csv.zip>.
+
+We'll be looking at `gross` as the outcome. We'll do some pre-processing to remove any `NA` values from the data set as well as convert string factors into numeric values so that we can better create a model.
+
+```{r message=FALSE}
+
+imdb <- read.csv("data/movie_metadata.csv")
+imdb<- imdb[complete.cases(imdb),]
+imdb <- as.data.frame(lapply(imdb,as.numeric))
+names(imdb)[9:15]
+```
+
+## Elminating predictors
+
+We'll eliminate zero variance and correlated predictors with the `nearZeroVar` and `cor` functions
+
+```{r messages=FALSE,warning=FALSE}
+nearZeroVar(imdb,names = TRUE)
+descrCor <-  cor(imdb)
+findCorrelation(descrCor,names = TRUE)
+imdb <- imdb[,-nearZeroVar(imdb)]
+imdb <- imdb[,-findCorrelation(descrCor)]
+```
+
+## Identifying variable importance
+
+```{r echo=TRUE}
+inTrain <- createDataPartition(y=imdb$gross,p=0.75, list=FALSE)
+training <- imdb[inTrain,]
+testing <- imdb[-inTrain,]
+modFit <- lm(gross~.,data=training)
+imp <- varImp(modFit)
+imp$predictor <- row.names(imp)
+imp[imp$Overall>=10,]
+```
+
+Based on the table above, we'll use `num_voted_users` as the only predictor for our model
+
+## Testing our model prediction
+
+```{r echo=FALSE}
+modFit <- lm(gross~num_voted_users,data=training)
+pred <- predict(modFit,testing)
+df <- data.frame(prediction=pred,actual=testing$gross)
+df$diff <- df$prediction-df$actual
+plot(df$diff)
+```
+
+Predicted box office gross for `50,000` votes would be $`r prettyNum(round(predict(modFit,newdata = data.frame(num_voted_users=50000)),0),big.mark=",")`
